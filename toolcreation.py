@@ -1,39 +1,60 @@
-from langchain_core.tools import tool
+
+import os
+import json
 import requests
 
+from dotenv import load_dotenv
+from langchain_core.tools import tool
 
-# Tool for conversion 
+load_dotenv()
+
 
 @tool
-def get_conversion_factor(base_currency : str, target_currency : str) -> float:
-
+def get_conversion_factor(
+    base_currency: str,
+    target_currency: str
+) -> str:
+    """Get the latest conversion rate between two currencies.
+    
+    Args:
+        base_currency: Source currency code, e.g. INR.
+        target_currency: Target currency code, e.g. USD.
     """
-    This Function fetches the currency conversion between a given base_currency  and the target_currency
-    """
+    api_key = os.getenv("EXCHANGE_RATE_API_KEY")
 
-    url = f"https://v6.exchangerate-api.com/v6/your-api-key/pair/{base_currency}/{target_currency}"
+    if not api_key:
+        raise ValueError(
+            "EXCHANGE_RATE_API_KEY is missing from .env"
+        )
 
-    response = requests.get(url)
+    url = (
+        f"https://v6.exchangerate-api.com/v6/{api_key}"
+        f"/pair/{base_currency.upper()}/{target_currency.upper()}"
+    )
 
-    return response.json()
+    response = requests.get(url, timeout=15)
+    response.raise_for_status()
 
+    data = response.json()
 
+    if data.get("result") != "success":
+        raise ValueError(f"ExchangeRate-API error: {data}")
 
-response = get_conversion_factor.invoke({"base_currency": "USD","target_currency" :"INR"})
+    # Always return valid JSON text
+    return json.dumps(data)
 
-
-# Tool for Multiplying
 
 @tool
-def convert(base_currency_value : int, conversion_rate : float)-> float:
-
+def convert(amount: float, conversion_rate: float) -> str:
+    """Convert an amount using the provided exchange rate.
+    
+    Args:
+        amount: Amount in the source currency.
+        conversion_rate: Exchange rate from source to target.
     """
-    given a currency conversion rate this function calculates the target currency value from a given base currency value
-    """
+    if amount < 0:
+        raise ValueError("Amount cannot be negative.")
 
-    return base_currency_value*conversion_rate
+    converted_amount = amount * conversion_rate
 
-
-conversion_response = convert.invoke({"base_currency_value": 10, "conversion_rate" : 85})
-
-print(conversion_response)
+    return f"{converted_amount:.4f}"
